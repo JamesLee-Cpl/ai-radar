@@ -1,0 +1,9 @@
+# 本地运行产物，不发布到网页
+data/
+*.log
+
+# PC 本地辅助脚本（仅本机用，无需上云）
+serve.bat
+serve_hidden.vbs
+start_tunnel.ps1
+start_tunnel_hidden.vbs

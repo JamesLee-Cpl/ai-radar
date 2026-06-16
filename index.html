@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e1a">
+<title>AI硬件瓶颈雷达 · AI Hardware Bottleneck Radar</title>
+<style>
+  :root{
+    --bg:#0a0e1a; --bg2:#111827; --bg3:#1a2236; --line:#2a3650;
+    --txt:#e6eaf2; --mute:#8a96b0; --accent:#6ad0ff;
+    --br:#22c55e; --ip:#3b82f6; --wa:#a78bfa; --lo:#64748b; --warn:#f59e0b;
+    --up:#22c55e; --down:#ef4444;
+    --rel-direct:#22c55e; --rel-indirect:#f59e0b; --rel-low:#64748b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,"PingFang SC","Hiragino Sans","Microsoft YaHei",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;font-size:15px;line-height:1.55}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  header{padding:18px 16px 8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(10,14,26,.95);backdrop-filter:blur(10px);z-index:50}
+  .h-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.5px}
+  h1 .sub{color:var(--mute);font-weight:400;font-size:13px;margin-left:8px}
+  .meta{color:var(--mute);font-size:12px}
+  .btns{display:flex;gap:6px;flex-wrap:wrap}
+  button,.btn{background:var(--bg3);color:var(--txt);border:1px solid var(--line);padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit}
+  button:hover,.btn:hover{border-color:var(--accent);color:var(--accent)}
+  button.primary{background:var(--accent);color:#0a0e1a;border-color:var(--accent);font-weight:600}
+  button.warn{background:#3b1f1f;border-color:#5a2a2a;color:#fca5a5}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  main{max-width:1280px;margin:0 auto;padding:14px 14px 60px}
+  section{margin-bottom:22px}
+  h2{font-size:14px;color:var(--mute);font-weight:600;margin:0 0 8px;letter-spacing:.5px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  h2 .h2-meta{font-size:11px;color:var(--mute);font-weight:400;text-transform:none}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .stat{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .stat .n{font-size:22px;font-weight:700;line-height:1.1}
+  .stat .l{font-size:11px;color:var(--mute);margin-top:2px}
+  .stat.br .n{color:var(--br)} .stat.ip .n{color:var(--ip)} .stat.wa .n{color:var(--wa)} .stat.lo .n{color:var(--lo)}
+
+  /* Log */
+  .log-wrap{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .log-empty{color:var(--mute);font-size:13px;text-align:center;padding:14px}
+  .log-list{display:flex;flex-direction:column;gap:8px}
+  .log-item{display:grid;grid-template-columns:90px 1fr auto;gap:10px;align-items:center;padding:8px 10px;background:var(--bg3);border:1px solid var(--line);border-left:3px solid var(--br);border-radius:6px;font-size:13px}
+  .log-date{font-family:ui-monospace,monospace;color:var(--br);font-weight:700;font-size:12px}
+  .log-body{min-width:0}
+  .log-name{font-weight:600}
+  .log-note{font-size:11.5px;color:var(--mute);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .log-go{font-size:11px}
+
+  /* Timeline */
+  .tl-wrap{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  svg.gantt{display:block;min-width:760px;width:100%;height:auto}
+  .tl-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:8px;padding:0 4px}
+  .tl-legend span{display:inline-flex;align-items:center;gap:5px}
+  .tl-legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+
+  /* Filters */
+  .filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .chip{background:var(--bg3);border:1px solid var(--line);color:var(--mute);padding:5px 10px;border-radius:999px;font-size:12px;cursor:pointer;user-select:none}
+  .chip.active{background:var(--accent);color:#0a0e1a;border-color:var(--accent);font-weight:600}
+
+  /* Cards */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+  .card{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;transition:border-color .15s,box-shadow .3s}
+  .card:hover{border-color:#3a4866}
+  .card.breakthrough{border-color:rgba(34,197,94,.45);background:linear-gradient(180deg,rgba(34,197,94,.08),var(--bg2) 40%)}
+  .c-head{display:flex;justify-content:space-between;gap:8px;align-items:start}
+  .c-name{font-size:16px;font-weight:700;margin:0}
+  .c-cat{font-size:11px;color:var(--mute);margin-top:2px}
+  .badge{font-size:10.5px;padding:3px 8px;border-radius:999px;white-space:nowrap;font-weight:600;letter-spacing:.3px}
+  .badge.br{background:rgba(34,197,94,.18);color:var(--br);border:1px solid rgba(34,197,94,.4)}
+  .badge.ip{background:rgba(59,130,246,.18);color:var(--ip);border:1px solid rgba(59,130,246,.4)}
+  .badge.wa{background:rgba(167,139,250,.18);color:var(--wa);border:1px solid rgba(167,139,250,.4)}
+  .badge.lo{background:rgba(100,116,139,.18);color:var(--lo);border:1px solid rgba(100,116,139,.4)}
+  .meta-row{display:flex;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--mute)}
+  .meta-row b{color:var(--txt);font-weight:600}
+  .kv{display:flex;gap:6px;background:var(--bg3);padding:4px 8px;border-radius:6px;border:1px solid var(--line)}
+  .rel-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle}
+  .rel-direct{background:var(--rel-direct)} .rel-indirect{background:var(--rel-indirect)} .rel-low{background:var(--rel-low)}
+  .players{font-size:12px;color:var(--mute)}
+  .players b{color:var(--txt)}
+  .stocks{display:flex;flex-direction:column;gap:6px;margin-top:2px}
+  .stock{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:3px}
+  .stock-top{display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap}
+  .stock-name{font-weight:600;font-size:13px}
+  .stock-ticker{font-size:11px;color:var(--mute);font-family:ui-monospace,monospace}
+  .stock-rel{font-size:11px;color:var(--mute)}
+  .stock-links{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px;font-size:11px}
+  .market-tag{font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(106,208,255,.12);color:var(--accent);border:1px solid rgba(106,208,255,.3)}
+  .price{font-size:12px;font-family:ui-monospace,monospace;font-weight:700}
+  .price-row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mute);flex-wrap:wrap}
+  .chg{font-size:11px;font-weight:700;padding:1px 5px;border-radius:4px;font-family:ui-monospace,monospace}
+  .chg.up{background:rgba(34,197,94,.18);color:var(--up)}
+  .chg.down{background:rgba(239,68,68,.18);color:var(--down)}
+  .price-stale{color:var(--mute);font-size:10.5px}
+  .price-err{color:var(--warn);font-size:10.5px}
+  .notes{font-size:12.5px;color:#c8d2e8;background:var(--bg3);padding:8px 10px;border-radius:6px;border-left:3px solid var(--accent)}
+  .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;padding-top:10px;border-top:1px dashed var(--line)}
+  .br-box{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.35);border-radius:8px;padding:8px 10px;font-size:12.5px}
+  .br-box .br-date{color:var(--br);font-weight:700}
+  .form-inline{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+  input[type=date],input[type=text],textarea{background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:12px;font-family:inherit}
+  textarea{width:100%;min-height:50px;resize:vertical}
+
+  /* Modal */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;z-index:100}
+  .modal-c{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:16px;max-width:520px;width:100%;max-height:80vh;overflow:auto}
+  .modal h3{margin:0 0 10px}
+  .modal textarea{min-height:200px;font-family:ui-monospace,monospace;font-size:11.5px}
+  .hide{display:none !important}
+
+  /* Bubble panel */
+  .bubble-card{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+  .bubble-card.s5{border-color:rgba(239,68,68,.55);box-shadow:0 0 0 1px rgba(239,68,68,.2)}
+  .bubble-card.s4{border-color:rgba(249,115,22,.5)}
+  .bubble-top{display:flex;justify-content:space-between;gap:14px;align-items:end;flex-wrap:wrap}
+  .bubble-stage{font-size:22px;font-weight:800;line-height:1.1}
+  .bubble-stage .num{font-size:12px;color:var(--mute);font-weight:600;display:block;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px}
+  .bubble-scores{display:flex;gap:14px;font-size:12px;color:var(--mute);align-items:end}
+  .bubble-scores .sv{font-size:22px;font-weight:800;color:var(--txt);font-family:ui-monospace,monospace;line-height:1}
+  .bubble-scores .sb{display:flex;flex-direction:column;align-items:flex-end}
+  .meter-wrap{position:relative;padding:18px 0 32px}
+  .meter{display:flex;height:14px;border-radius:7px;overflow:hidden;border:1px solid var(--line)}
+  .meter .seg{flex:1;position:relative}
+  .meter .seg:nth-child(1){background:linear-gradient(90deg,#16a34a,#22c55e)}
+  .meter .seg:nth-child(2){background:linear-gradient(90deg,#22c55e,#84cc16)}
+  .meter .seg:nth-child(3){background:linear-gradient(90deg,#eab308,#f97316)}
+  .meter .seg:nth-child(4){background:linear-gradient(90deg,#f97316,#ef4444)}
+  .meter .seg:nth-child(5){background:linear-gradient(90deg,#ef4444,#991b1b)}
+  .meter-labels{display:flex;font-size:10.5px;color:var(--mute);margin-top:6px;text-align:center}
+  .meter-labels span{flex:1}
+  .meter-marker{position:absolute;top:14px;width:2px;height:22px;background:#fff;transform:translateX(-1px);box-shadow:0 0 6px rgba(255,255,255,.8)}
+  .meter-marker::before{content:'';position:absolute;top:-7px;left:-5px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid #fff}
+  .meter-marker .lbl{position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:#fff;color:#0a0e1a;font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;font-family:ui-monospace,monospace;white-space:nowrap}
+
+  .bubble-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.bubble-grid{grid-template-columns:1fr}}
+  .bubble-sub h3{font-size:12px;color:var(--mute);margin:0 0 6px;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
+  .ind-list{display:flex;flex-direction:column;gap:5px}
+  .ind{display:grid;grid-template-columns:1fr auto;gap:6px;padding:6px 8px;background:var(--bg3);border:1px solid var(--line);border-left:3px solid var(--lo);border-radius:6px;font-size:12px}
+  .ind.s5{border-left-color:#ef4444}
+  .ind.s4{border-left-color:#f97316}
+  .ind.s3{border-left-color:#eab308}
+  .ind.s2{border-left-color:#84cc16}
+  .ind.s1{border-left-color:#22c55e}
+  .ind-name{font-weight:600;font-size:12px}
+  .ind-reason{font-size:10.5px;color:var(--mute);margin-top:1px}
+  .ind-right{display:flex;flex-direction:column;align-items:end;gap:1px}
+  .ind-value{font-family:ui-monospace,monospace;font-weight:700;font-size:12.5px;color:var(--txt)}
+  .ind-score{font-size:10.5px;color:var(--mute);font-family:ui-monospace,monospace}
+
+  .chk-list{display:flex;flex-direction:column;gap:4px}
+  .chk{display:flex;align-items:flex-start;gap:8px;padding:5px 8px;background:var(--bg3);border:1px solid var(--line);border-radius:6px;cursor:pointer;font-size:12px;user-select:none}
+  .chk:hover{border-color:var(--accent)}
+  .chk input{margin:2px 0 0;accent-color:var(--warn)}
+  .chk.on{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.45)}
+  .chk-w{margin-left:auto;font-size:10.5px;color:var(--mute);font-family:ui-monospace,monospace;flex-shrink:0;padding-left:8px}
+
+  .pulse-once{animation:pulse 1.5s ease-out 1}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 var(--accent)}100%{box-shadow:0 0 0 0 transparent}}
+
+  @media (max-width:640px){
+    h1{font-size:16px} h1 .sub{display:block;margin-left:0;font-size:11px;margin-top:2px}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .stat .n{font-size:18px}
+    main{padding:10px 10px 60px}
+    .card{padding:12px}
+    .grid{grid-template-columns:1fr;gap:10px}
+    .log-item{grid-template-columns:78px 1fr;grid-auto-rows:auto}
+    .log-go{grid-column:1/-1;text-align:right}
+  }
+  footer{color:var(--mute);font-size:11px;text-align:center;padding:20px 10px;border-top:1px solid var(--line);margin-top:30px}
+</style>
+</head>
+<body>
+<header>
+  <div class="h-row">
+    <div>
+      <h1>📡 AI硬件瓶颈雷达<span class="sub">AI Hardware Bottleneck Radar</span></h1>
+      <div class="meta" id="meta">数据基准 2026-06 · 持仓视角：日股 AI/半导体</div>
+      <div class="meta" id="prices-meta" style="margin-top:2px"></div>
+      <div class="meta" id="tunnel-meta" style="margin-top:2px"></div>
+    </div>
+    <div class="btns">
+      <button id="btn-refresh" onclick="location.reload()" title="运行 python fetch_prices.py 后点此重载">🔄 重载行情</button>
+      <button onclick="exportData()">导出标记</button>
+      <button onclick="openImport()">导入标记</button>
+      <button class="warn" onclick="resetAll()">重置</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2><span>📊 日経バブル進行度</span><span class="h2-meta" id="bubble-meta"></span></h2>
+    <div id="bubble" class="bubble-card"></div>
+  </section>
+
+  <section>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section>
+    <h2><span>突破日志（已标记）</span><span class="h2-meta" id="log-meta"></span></h2>
+    <div class="log-wrap" id="log"></div>
+  </section>
+
+  <section>
+    <h2><span>突破时间轴（2024–2045）</span><span class="h2-meta">点击条形跳转至卡片</span></h2>
+    <div class="tl-wrap">
+      <svg class="gantt" id="gantt" viewBox="0 0 1200 520" preserveAspectRatio="xMinYMin meet"></svg>
+    </div>
+    <div class="tl-legend">
+      <span><i style="background:var(--br)"></i>已突破</span>
+      <span><i style="background:var(--ip)"></i>进行中（窗口已开）</span>
+      <span><i style="background:var(--wa)"></i>观察中（窗口未到）</span>
+      <span><i style="background:var(--lo)"></i>长期（2030+）</span>
+    </div>
+  </section>
+
+  <section>
+    <h2><span>瓶颈卡片 · 标记突破并核对股价</span><span class="h2-meta" id="cards-meta"></span></h2>
+    <div class="filters" id="filters"></div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <footer>
+    瓶颈数据 <code>data.js</code> · 行情 <code>prices.js</code>（<code>python fetch_prices.py</code>）· 泡沫指标 <code>bubble.js</code>（<code>python bubble.py</code>）<br>
+    行情来源 Yahoo Finance（日终）· 走势图 Yahoo Finance / TradingView · 仅参考、非投资建议
+  </footer>
+</main>
+
+<div id="modal" class="modal hide">
+  <div class="modal-c">
+    <h3 id="modalT">导入标记</h3>
+    <p style="color:var(--mute);font-size:12px;margin:0 0 8px" id="modalD">⚠️ 仅用于跨设备同步你标记的突破日期，不是导入瓶颈列表。瓶颈列表写在 data.js。</p>
+    <textarea id="modalText"></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">
+      <button onclick="closeModal()">取消</button>
+      <button class="primary" id="modalOk" onclick="doImport()">导入</button>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="prices.js" onerror="window.PRICES_LOAD_FAILED=true"></script>
+<script src="bubble.js" onerror="window.BUBBLE_LOAD_FAILED=true"></script>
+<script>
+/* ============== STATE ============== */
+const STORAGE_KEY = 'ai-hw-radar-v1';
+const PRICE_KEY = 'ai-hw-radar-prices-v1';
+const PRICE_TTL_MS = 10*60*1000; // 10 min cache
+const NOW_YEAR = new Date().getFullYear() + (new Date().getMonth()+1)/12;
+
+function loadState(){ try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch(e){return{};} }
+function saveState(s){ localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+function loadPrices(){ try{return JSON.parse(localStorage.getItem(PRICE_KEY))||{};}catch(e){return{};} }
+function savePrices(p){ localStorage.setItem(PRICE_KEY, JSON.stringify(p)); }
+
+let STATE = loadState();
+let PRICES = loadPrices();
+
+/* ============== HELPERS ============== */
+function effectiveStatus(b){
+  if(STATE[b.id] && STATE[b.id].brDate) return 'breakthrough';
+  if(b.status==='in-progress' && b.start<=NOW_YEAR) return 'in-progress';
+  if(b.start>2030) return 'long-term';
+  return b.status==='long-term' ? 'long-term' : 'watching';
+}
+function statusLabel(s){return {breakthrough:'已突破','in-progress':'进行中',watching:'观察中','long-term':'长期'}[s];}
+function statusCls(s){return {breakthrough:'br','in-progress':'ip',watching:'wa','long-term':'lo'}[s];}
+function relLabel(r){return {direct:'强相关',indirect:'间接',low:'低相关'}[r];}
+
+function chartURL(ticker, market){
+  if(ticker==='-' || !ticker) return null;
+  if(market==='日股') return `https://finance.yahoo.co.jp/quote/${ticker}/chart`;
+  return `https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}/chart`;
+}
+function tvURL(ticker, market){
+  if(ticker==='-' || !ticker) return null;
+  const t = market==='日股'? `TSE:${ticker.replace('.T','')}`
+          : market==='韩股'? `KRX:${ticker.replace('.KS','')}`
+          : `NASDAQ:${ticker}`;
+  return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(t)}`;
+}
+
+/* Stooq symbol mapping. Returns null if not supported. */
+function toStooqSymbol(ticker, market){
+  if(!ticker || ticker==='-') return null;
+  if(market==='日股') return ticker.replace('.T','').toLowerCase()+'.jp';
+  if(market==='韩股') return ticker.replace('.KS','').toLowerCase()+'.kr';
+  if(market==='美股' || market==='OTC') return ticker.toLowerCase()+'.us';
+  return null;
+}
+function currencyPrefix(market){
+  return market==='日股'?'¥':market==='韩股'?'₩':'$';
+}
+
+/* ============== RENDER: STATS ============== */
+function renderStats(){
+  const counts = {breakthrough:0,'in-progress':0,watching:0,'long-term':0};
+  BOTTLENECKS.forEach(b=>counts[effectiveStatus(b)]++);
+  document.getElementById('stats').innerHTML = `
+    <div class="stat br"><div class="n">${counts.breakthrough}</div><div class="l">已突破 BREAKTHROUGH</div></div>
+    <div class="stat ip"><div class="n">${counts['in-progress']}</div><div class="l">进行中 IN-PROGRESS</div></div>
+    <div class="stat wa"><div class="n">${counts.watching}</div><div class="l">观察中 WATCHING</div></div>
+    <div class="stat lo"><div class="n">${counts['long-term']}</div><div class="l">长期 LONG-TERM</div></div>`;
+}
+
+/* ============== RENDER: LOG ============== */
+function renderLog(){
+  const items = [];
+  for(const b of BOTTLENECKS){
+    const st = STATE[b.id];
+    if(st && st.brDate) items.push({b, st});
+  }
+  items.sort((a,c)=> c.st.brDate.localeCompare(a.st.brDate));
+  const el = document.getElementById('log');
+  document.getElementById('log-meta').textContent = items.length ? `共 ${items.length} 条 · 按日期倒序` : '';
+  if(items.length===0){
+    el.innerHTML = `<div class="log-empty">尚无突破记录。在下方瓶颈卡片点「标记突破」即可加入此日志。</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="log-list">${items.map(({b,st})=>`
+    <div class="log-item">
+      <div class="log-date">${st.brDate}</div>
+      <div class="log-body">
+        <div class="log-name">${escapeHtml(b.name)} <span style="color:var(--mute);font-weight:400;font-size:11px">· ${escapeHtml(b.cat)}</span></div>
+        ${st.note?`<div class="log-note">${escapeHtml(st.note)}</div>`:''}
+      </div>
+      <a class="log-go" href="#card-${b.id}" onclick="scrollToCard('${b.id}');return false;">查看 →</a>
+    </div>`).join('')}</div>`;
+}
+
+/* ============== RENDER: GANTT ============== */
+function renderGantt(){
+  const svg = document.getElementById('gantt');
+  const X0=160, X1=1180, Y0=30, ROW=42;
+  const MIN=2024, MAX=2045;
+  const xScale = y => X0 + (y-MIN)/(MAX-MIN)*(X1-X0);
+  let out = '';
+  for(let y=MIN;y<=MAX;y++){
+    const x=xScale(y);
+    const major = (y%5===0);
+    out += `<line x1="${x}" y1="${Y0}" x2="${x}" y2="${Y0+ROW*BOTTLENECKS.length+10}" stroke="${major?'#2a3650':'#1a2236'}" stroke-width="${major?1:0.5}"/>`;
+    if(major) out += `<text x="${x}" y="${Y0-8}" fill="#8a96b0" font-size="11" text-anchor="middle">${y}</text>`;
+  }
+  const xNow = xScale(NOW_YEAR);
+  out += `<line x1="${xNow}" y1="${Y0-4}" x2="${xNow}" y2="${Y0+ROW*BOTTLENECKS.length+6}" stroke="#6ad0ff" stroke-width="1.5" stroke-dasharray="3,3"/>`;
+  out += `<text x="${xNow+4}" y="${Y0-14}" fill="#6ad0ff" font-size="11" font-weight="700">NOW ${new Date().getFullYear()}</text>`;
+
+  BOTTLENECKS.forEach((b,i)=>{
+    const y = Y0 + 18 + i*ROW;
+    const x1 = xScale(b.start), x2 = xScale(b.end);
+    const s = effectiveStatus(b);
+    const color = {breakthrough:'#22c55e','in-progress':'#3b82f6',watching:'#a78bfa','long-term':'#64748b'}[s];
+    out += `<text x="${X0-8}" y="${y+5}" fill="#e6eaf2" font-size="12" text-anchor="end" font-weight="600">${escapeXml(b.name)}</text>`;
+    out += `<rect x="${x1}" y="${y-9}" width="${x2-x1}" height="18" rx="6" fill="${color}" opacity="${s==='long-term'?0.35:0.75}" style="cursor:pointer" onclick="scrollToCard('${b.id}')"><title>${escapeXml(b.name)} · ${b.start}–${b.end} · ${b.mult}</title></rect>`;
+    out += `<text x="${(x1+x2)/2}" y="${y+4}" fill="#0a0e1a" font-size="10.5" text-anchor="middle" font-weight="700" style="pointer-events:none">${escapeXml(b.mult)}</text>`;
+    if(STATE[b.id] && STATE[b.id].brDate){
+      const brYear = parseFloat(STATE[b.id].brDate.substring(0,4)) + (parseInt(STATE[b.id].brDate.substring(5,7))||1)/12;
+      const xb = xScale(brYear);
+      out += `<circle cx="${xb}" cy="${y}" r="6" fill="#22c55e" stroke="#fff" stroke-width="2"><title>突破 ${STATE[b.id].brDate}</title></circle>`;
+    }
+  });
+  svg.setAttribute('viewBox', `0 0 1200 ${Y0+ROW*BOTTLENECKS.length+30}`);
+  svg.innerHTML = out;
+}
+function escapeXml(s){return String(s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));}
+function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+/* ============== RENDER: FILTERS + CARDS ============== */
+let currentFilter = 'all';
+function renderFilters(){
+  const el = document.getElementById('filters');
+  const opts = [
+    ['all','全部'],['breakthrough','已突破'],['in-progress','进行中'],['watching','观察中'],['long-term','长期'],
+    ['direct','强相关'],['indirect','间接'],
+  ];
+  el.innerHTML = opts.map(([k,v])=>`<div class="chip ${currentFilter===k?'active':''}" onclick="setFilter('${k}')">${v}</div>`).join('');
+}
+function setFilter(f){currentFilter=f;renderFilters();renderCards();}
+
+function renderCards(){
+  const el = document.getElementById('grid');
+  let list = BOTTLENECKS.slice();
+  if(['direct','indirect','low'].includes(currentFilter)) list = list.filter(b=>b.relevance===currentFilter);
+  else if(currentFilter!=='all') list = list.filter(b=>effectiveStatus(b)===currentFilter);
+  document.getElementById('cards-meta').textContent = `${list.length}/${BOTTLENECKS.length} 项`;
+  el.innerHTML = list.map(b=>cardHTML(b)).join('');
+}
+
+function cardHTML(b){
+  const s = effectiveStatus(b);
+  const cls = statusCls(s);
+  const st = STATE[b.id] || {};
+  const isBr = !!st.brDate;
+  return `
+  <div class="card ${isBr?'breakthrough':''}" id="card-${b.id}">
+    <div class="c-head">
+      <div>
+        <div class="c-name">${escapeHtml(b.name)}</div>
+        <div class="c-cat">${escapeHtml(b.cat)}</div>
+      </div>
+      <span class="badge ${cls}">${statusLabel(s)}</span>
+    </div>
+    <div class="meta-row">
+      <span class="kv"><b>窗口</b> ${b.start}–${b.end}</span>
+      <span class="kv"><b>突破倍率</b> ${escapeHtml(b.mult)}<span style="color:var(--mute)"> ${escapeHtml(b.multType)}</span></span>
+      <span class="kv"><span class="rel-dot rel-${b.relevance}"></span>${relLabel(b.relevance)}</span>
+    </div>
+    <div class="players"><b>代表玩家：</b>${b.players.map(escapeHtml).join(' · ')}</div>
+    <div class="notes">${escapeHtml(b.note)}</div>
+    <div>
+      <div style="font-size:12px;color:var(--mute);margin-bottom:4px">关联标的（核对突破前后股价）</div>
+      <div class="stocks">${b.stocks.map(s=>stockHTML(s,b,st)).join('')}</div>
+    </div>
+    <div class="actions">
+      ${isBr ? `
+        <div class="br-box" style="flex:1">
+          ✅ 已标记突破 <span class="br-date">${st.brDate}</span>
+          ${st.note?`<div style="color:var(--mute);margin-top:3px">备注：${escapeHtml(st.note)}</div>`:''}
+          <button style="margin-top:6px" onclick="unmark('${b.id}')">取消标记</button>
+        </div>
+      ` : `
+        <div class="form-inline" style="flex:1">
+          <span style="font-size:12px;color:var(--mute)">突破日：</span>
+          <input type="date" id="d-${b.id}" value="${new Date().toISOString().substring(0,10)}">
+          <input type="text" id="n-${b.id}" placeholder="备注/触发新闻链接" style="flex:1;min-width:140px">
+          <button class="primary" onclick="markBreak('${b.id}')">标记突破</button>
+        </div>
+      `}
+    </div>
+  </div>`;
+}
+
+function stockHTML(s, bottleneck, state){
+  const ch = chartURL(s.ticker, s.market);
+  const tv = tvURL(s.ticker, s.market);
+  const brDate = state.brDate;
+  // 行情来源：prices.js (由 fetch_prices.py 生成)。键就是 Yahoo ticker (如 4063.T / MU / 000660.KS)
+  const PD = window.PRICES_DATA || {};
+  const cached = PD[s.ticker];
+  let priceHtml = '';
+  if(cached){
+    if(cached.err){
+      priceHtml = `<span class="price-err">⚠ ${escapeHtml(cached.err)}</span>`;
+    }else if(cached.close!=null){
+      const cur = currencyPrefix(s.market);
+      const chg = cached.chgPct;
+      const chgCls = chg!=null && chg>=0?'up':'down';
+      const sign = chg!=null && chg>=0?'+':'';
+      priceHtml = `
+        <span class="price">${cur}${formatPrice(cached.close, s.market)}</span>
+        ${chg!=null?`<span class="chg ${chgCls}">${sign}${chg.toFixed(2)}%</span>`:''}
+        <span class="price-stale">${cached.date}</span>`;
+    }
+  }
+  return `
+  <div class="stock">
+    <div class="stock-top">
+      <div>
+        <span class="stock-name">${escapeHtml(s.name)}</span>
+        <span class="stock-ticker"> ${escapeHtml(s.ticker)}</span>
+        <span class="market-tag">${escapeHtml(s.market)}</span>
+      </div>
+    </div>
+    <div class="stock-rel">${escapeHtml(s.rel)}</div>
+    ${priceHtml?`<div class="price-row">${priceHtml}</div>`:''}
+    <div class="stock-links">
+      ${ch?`<a href="${ch}" target="_blank" rel="noopener">📈 Yahoo 走势</a>`:''}
+      ${tv?`<a href="${tv}" target="_blank" rel="noopener">📊 TradingView</a>`:''}
+      ${brDate && ch?`<span style="color:var(--mute)">·核对突破日 ${brDate} 前后股价</span>`:''}
+    </div>
+  </div>`;
+}
+function formatPrice(p, market){
+  if(p==null||isNaN(p)) return '-';
+  if(market==='日股' || market==='韩股') return Math.round(p).toLocaleString();
+  return p.toFixed(2);
+}
+
+/* ============== ACTIONS ============== */
+function markBreak(id){
+  const d = document.getElementById('d-'+id).value;
+  const n = document.getElementById('n-'+id).value;
+  if(!d){alert('请选择突破日');return;}
+  STATE[id] = {brDate:d, note:n, markedAt:new Date().toISOString()};
+  saveState(STATE); renderAll();
+}
+function unmark(id){
+  if(!confirm('取消该瓶颈的"已突破"标记？')) return;
+  delete STATE[id]; saveState(STATE); renderAll();
+}
+function resetAll(){
+  if(!confirm('清空所有突破标记？该操作不可恢复（导出后可还原）。')) return;
+  STATE={}; saveState(STATE); renderAll();
+}
+function scrollToCard(id){
+  const c = document.getElementById('card-'+id);
+  if(c){
+    c.scrollIntoView({behavior:'smooth',block:'center'});
+    c.classList.remove('pulse-once'); void c.offsetWidth; c.classList.add('pulse-once');
+  }
+}
+
+/* Export / Import */
+function exportData(){
+  const blob = new Blob([JSON.stringify(STATE,null,2)],{type:'application/json'});
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=u; a.download=`ai-radar-${new Date().toISOString().substring(0,10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(u);
+}
+function openImport(){
+  document.getElementById('modal').classList.remove('hide');
+  document.getElementById('modalText').value = JSON.stringify(STATE,null,2);
+}
+function closeModal(){document.getElementById('modal').classList.add('hide');}
+function doImport(){
+  try{
+    const v = JSON.parse(document.getElementById('modalText').value);
+    if(typeof v!=='object'||Array.isArray(v)) throw new Error('需要 object');
+    STATE=v; saveState(STATE); closeModal(); renderAll();
+  }catch(e){alert('JSON 无效：'+e.message);}
+}
+
+/* ============== PRICE FETCH (Stooq via CORS proxy) ============== */
+// Stooq does not send CORS headers. Wrap via public proxies with fallback.
+// Order matters: corsproxy.io tolerates `Origin: null` (file:// pages); allorigins sometimes rejects it.
+const PROXIES = [
+  {name:'corsproxy.io', wrap: u => `https://corsproxy.io/?${encodeURIComponent(u)}`},
+  {name:'allorigins',   wrap: u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`},
+  {name:'codetabs',     wrap: u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`},
+  {name:'cors.eu.org',  wrap: u => `https://cors.eu.org/${u}`},
+];
+console.log('[AI Radar] script build v2 — CORS proxy enabled. If you see Stooq direct URL in errors, hard-refresh (Ctrl+Shift+R).');
+async function fetchViaProxy(url){
+  let lastErr;
+  for(const p of PROXIES){
+    try{
+      const r = await fetch(p.wrap(url), {cache:'no-store'});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const text = await r.text();
+      if(!text || text.length<5) throw new Error('empty body');
+      return text;
+    }catch(e){
+      console.warn(`[AI Radar] proxy ${p.name} failed:`, e.message||e);
+      lastErr = new Error(`${p.name}: ${e.message||e}`);
+    }
+  }
+  throw lastErr || new Error('all proxies failed');
+}
+async function fetchOne(stooqSym){
+  const url = `https://stooq.com/q/l/?s=${encodeURIComponent(stooqSym)}&f=sd2t2ohlcv&h&e=csv`;
+  const csv = await fetchViaProxy(url);
+  const lines = csv.trim().split(/\r?\n/);
+  if(lines.length<2) throw new Error('empty');
+  const cols = lines[1].split(',');
+  // Symbol,Date,Time,Open,High,Low,Close,Volume
+  const date = cols[1];
+  const open = parseFloat(cols[3]);
+  const close = parseFloat(cols[6]);
+  if(date==='N/D'||isNaN(close)) throw new Error('no data');
+  const chgPct = (open && !isNaN(open)) ? ((close-open)/open)*100 : null;
+  return {close, open, date, chgPct, fetchedAt: Date.now()};
+}
+
+function collectAllSymbols(){
+  const set = new Map(); // stooqSym -> {ticker, market}
+  for(const b of BOTTLENECKS){
+    for(const s of b.stocks){
+      const sym = toStooqSymbol(s.ticker, s.market);
+      if(sym && !set.has(sym)) set.set(sym, {ticker:s.ticker, market:s.market, name:s.name});
+    }
+  }
+  return set;
+}
+
+async function refreshAllPrices(){
+  const btn = document.getElementById('btn-refresh');
+  const syms = collectAllSymbols();
+  const list = [...syms.keys()];
+  let ok=0, fail=0, skipped=0;
+  btn.disabled=true; btn.textContent=`⏳ 0/${list.length}`;
+  // serial with small delay to be polite
+  for(let i=0;i<list.length;i++){
+    const sym = list[i];
+    const cached = PRICES[sym];
+    if(cached && !cached.err && (Date.now()-cached.fetchedAt) < PRICE_TTL_MS){ skipped++; btn.textContent=`⏳ ${i+1}/${list.length}`; continue; }
+    try{
+      const data = await fetchOne(sym);
+      PRICES[sym] = data; ok++;
+    }catch(e){
+      PRICES[sym] = {err:String(e.message||e).substring(0,40), fetchedAt: Date.now()};
+      fail++;
+    }
+    btn.textContent=`⏳ ${i+1}/${list.length}`;
+    if(i<list.length-1) await new Promise(r=>setTimeout(r,120));
+  }
+  savePrices(PRICES);
+  btn.disabled=false; btn.textContent='🔄 刷新行情';
+  renderCards();
+  const stamp = new Date().toLocaleTimeString();
+  setTimeout(()=>alert(`行情更新完毕 ${stamp}\n成功 ${ok} · 失败 ${fail} · 命中缓存 ${skipped}\n（失败的多为韩股/未上市/OTC，雅虎链接仍可用）`), 100);
+}
+
+/* ============== BUBBLE PANEL ============== */
+const BUBBLE_STORAGE_KEY = 'ai-hw-radar-bubble-v1';
+function loadBubbleState(){ try{return JSON.parse(localStorage.getItem(BUBBLE_STORAGE_KEY))||{};}catch(e){return{};} }
+function saveBubbleState(s){ localStorage.setItem(BUBBLE_STORAGE_KEY, JSON.stringify(s)); }
+let BUBBLE_STATE = loadBubbleState();
+
+function stageFromScore(s){
+  if(s<20) return {num:1,label:'蓄積期 (Stealth)',cls:'s1'};
+  if(s<40) return {num:2,label:'認知期 (Awareness)',cls:'s2'};
+  if(s<60) return {num:3,label:'熱狂期 (Mania)',cls:'s3'};
+  if(s<80) return {num:4,label:'吹き上げ期 (Blow-off Top)',cls:'s4'};
+  return     {num:5,label:'崩壊予兆期 (Crash Imminent)',cls:'s5'};
+}
+function indStageCls(s){
+  if(s<20) return 's1';
+  if(s<40) return 's2';
+  if(s<60) return 's3';
+  if(s<80) return 's4';
+  return 's5';
+}
+function toggleManual(key){
+  BUBBLE_STATE[key] = !BUBBLE_STATE[key];
+  saveBubbleState(BUBBLE_STATE);
+  renderBubble();
+}
+
+function renderBubble(){
+  const el = document.getElementById('bubble');
+  const meta = document.getElementById('bubble-meta');
+  if(window.BUBBLE_LOAD_FAILED || !window.BUBBLE_DATA){
+    el.className = 'bubble-card';
+    el.innerHTML = `<div style="text-align:center;color:var(--warn);padding:20px;font-size:13px">⚠ 未找到 bubble.js — 请先运行 <code>python bubble.py</code> 计算泡沫指标</div>`;
+    meta.textContent = '';
+    return;
+  }
+  const B = window.BUBBLE_DATA;
+  const autoScore = B.auto_score;
+  // manual score = sum of weights of checked items, max ~100
+  const totalWeight = B.manual_checklist.reduce((a,c)=>a+c.weight, 0);
+  const checkedWeight = B.manual_checklist.reduce((a,c)=>a + (BUBBLE_STATE[c.key]?c.weight:0), 0);
+  const manualScore = totalWeight ? (checkedWeight / totalWeight * 100) : 0;
+  // final = 70% auto + 30% manual
+  const finalScore = autoScore * 0.7 + manualScore * 0.3;
+  const stage = stageFromScore(finalScore);
+
+  el.className = `bubble-card ${stage.cls}`;
+  const indSorted = [...B.indicators].sort((a,b)=>b.score-a.score);
+
+  el.innerHTML = `
+    <div class="bubble-top">
+      <div class="bubble-stage" style="color:${B.stage_color}">
+        <span class="num">Stage ${stage.num} / 5 · 日経 ${B.nikkei_close.toLocaleString(undefined,{maximumFractionDigits:0})} (${B.nikkei_date})</span>
+        ${stage.label}
+      </div>
+      <div class="bubble-scores">
+        <div class="sb"><span class="sv">${finalScore.toFixed(1)}</span><span>综合分</span></div>
+        <div class="sb"><span class="sv" style="color:var(--mute)">${autoScore.toFixed(1)}</span><span>自动 ×0.7</span></div>
+        <div class="sb"><span class="sv" style="color:var(--mute)">${manualScore.toFixed(0)}</span><span>人工 ×0.3</span></div>
+      </div>
+    </div>
+    <div class="meter-wrap">
+      <div class="meter">
+        <div class="seg" title="Stage 1 蓄積期 (0–20)"></div>
+        <div class="seg" title="Stage 2 認知期 (20–40)"></div>
+        <div class="seg" title="Stage 3 熱狂期 (40–60)"></div>
+        <div class="seg" title="Stage 4 吹き上げ期 (60–80)"></div>
+        <div class="seg" title="Stage 5 崩壊予兆期 (80–100)"></div>
+      </div>
+      <div class="meter-marker" style="left:${Math.min(100,Math.max(0,finalScore))}%">
+        <span class="lbl">${finalScore.toFixed(0)}</span>
+      </div>
+      <div class="meter-labels">
+        <span>蓄積<br>0–20</span><span>認知<br>20–40</span><span>熱狂<br>40–60</span><span>吹き上げ<br>60–80</span><span>崩壊予兆<br>80–100</span>
+      </div>
+    </div>
+    <div class="bubble-grid">
+      <div class="bubble-sub">
+        <h3>📈 自動指标（${B.indicators.length}项・按风险降序）</h3>
+        <div class="ind-list">
+          ${indSorted.map(i => `
+            <div class="ind ${indStageCls(i.score)}">
+              <div>
+                <div class="ind-name">${escapeHtml(i.name)}</div>
+                <div class="ind-reason">${escapeHtml(i.reason)}</div>
+              </div>
+              <div class="ind-right">
+                <span class="ind-value">${escapeHtml(i.display)}</span>
+                <span class="ind-score">${i.score.toFixed(0)}/100</span>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="bubble-sub">
+        <h3>☑ 人工清单（点击勾选 · 共 ${checkedWeight}/${totalWeight}）</h3>
+        <div class="chk-list">
+          ${B.manual_checklist.map(c => {
+            const on = !!BUBBLE_STATE[c.key];
+            return `
+            <label class="chk ${on?'on':''}" onclick="toggleManual('${c.key}');event.preventDefault()">
+              <input type="checkbox" ${on?'checked':''} onclick="event.preventDefault()">
+              <span>${escapeHtml(c.label)}</span>
+              <span class="chk-w">+${c.weight}</span>
+            </label>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+
+  meta.textContent = `生成于 ${B.generated_at} · 重跑 bubble.py 更新`;
+}
+window.toggleManual = toggleManual;
+
+/* ============== INIT ============== */
+function renderPricesMeta(){
+  const el = document.getElementById('prices-meta');
+  if(!el) return;
+  if(window.PRICES_LOAD_FAILED || !window.PRICES_DATA){
+    el.innerHTML = `<span style="color:var(--warn)">⚠ 未找到 prices.js — 请先运行 <code>python fetch_prices.py</code> 生成行情</span>`;
+    return;
+  }
+  const n = Object.keys(window.PRICES_DATA).length;
+  const ok = Object.values(window.PRICES_DATA).filter(v=>!v.err).length;
+  const stamp = window.PRICES_GENERATED_AT || '?';
+  el.innerHTML = `📊 行情 ${ok}/${n} · 生成于 ${stamp} <span style="color:var(--mute)">· 重跑 fetch_prices.py 更新</span>`;
+}
+function renderAll(){renderBubble();renderPricesMeta();renderStats();renderLog();renderGantt();renderFilters();renderCards();}
+renderAll();
+// 数据由 PC 上的计划任务每日 07:00 / 16:30 JST 刷新后 git push 到 GitHub Pages
+(function(){
+  const el = document.getElementById('tunnel-meta');
+  if(el) el.innerHTML = `☁️ <span style="color:var(--mute)">云端托管 · 数据每日自动更新（PC 关机也可浏览，显示最近一次数据）</span>`;
+})();
+// expose to inline handlers
+window.scrollToCard = scrollToCard;
+window.markBreak = markBreak;
+window.unmark = unmark;
+window.setFilter = setFilter;
+window.exportData = exportData;
+window.openImport = openImport;
+window.closeModal = closeModal;
+window.doImport = doImport;
+window.resetAll = resetAll;
+window.refreshAllPrices = refreshAllPrices;
+</script>
+</body>
+</html>
