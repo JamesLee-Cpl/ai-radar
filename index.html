@@ -160,6 +160,16 @@
   .chk input{margin:2px 0 0;accent-color:var(--warn)}
   .chk.on{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.45)}
   .chk-w{margin-left:auto;font-size:10.5px;color:var(--mute);font-family:ui-monospace,monospace;flex-shrink:0;padding-left:8px}
+  .chk a{font-size:10.5px;color:var(--accent);flex-shrink:0;margin-left:6px}
+
+  /* Credit panel extras */
+  .thesis-box{background:rgba(106,208,255,.08);border:1px solid rgba(106,208,255,.3);border-left:3px solid var(--accent);border-radius:6px;padding:8px 11px;font-size:12.5px;color:#c8d2e8;line-height:1.5}
+  .transmission-box{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-left:3px solid var(--warn);border-radius:6px;padding:8px 11px;font-size:12px;color:#e8d9c0;line-height:1.5}
+  .meter.m4 .seg:nth-child(1){background:linear-gradient(90deg,#16a34a,#22c55e)}
+  .meter.m4 .seg:nth-child(2){background:linear-gradient(90deg,#22c55e,#eab308)}
+  .meter.m4 .seg:nth-child(3){background:linear-gradient(90deg,#eab308,#f97316)}
+  .meter.m4 .seg:nth-child(4){background:linear-gradient(90deg,#f97316,#991b1b)}
+  .ind-src{font-size:9.5px;color:var(--mute);border:1px solid var(--line);border-radius:3px;padding:0 4px;margin-left:5px;vertical-align:1px}
 
   .pulse-once{animation:pulse 1.5s ease-out 1}
   @keyframes pulse{0%{box-shadow:0 0 0 0 var(--accent)}100%{box-shadow:0 0 0 0 transparent}}
@@ -199,6 +209,11 @@
   <section>
     <h2><span>📊 日経バブル進行度</span><span class="h2-meta" id="bubble-meta"></span></h2>
     <div id="bubble" class="bubble-card"></div>
+  </section>
+
+  <section>
+    <h2><span>🏦 信用·杠杆危机前兆（雷曼型）</span><span class="h2-meta" id="credit-meta"></span></h2>
+    <div id="credit" class="bubble-card"></div>
   </section>
 
   <section>
@@ -250,6 +265,7 @@
 <script src="data.js"></script>
 <script src="prices.js" onerror="window.PRICES_LOAD_FAILED=true"></script>
 <script src="bubble.js" onerror="window.BUBBLE_LOAD_FAILED=true"></script>
+<script src="credit.js" onerror="window.CREDIT_LOAD_FAILED=true"></script>
 <script>
 /* ============== STATE ============== */
 const STORAGE_KEY = 'ai-hw-radar-v1';
@@ -724,6 +740,110 @@ function renderBubble(){
 }
 window.toggleManual = toggleManual;
 
+/* ============== CREDIT PANEL（信用危机前兆） ============== */
+const CREDIT_STORAGE_KEY = 'ai-hw-radar-credit-v1';
+function loadCreditState(){ try{return JSON.parse(localStorage.getItem(CREDIT_STORAGE_KEY))||{};}catch(e){return{};} }
+function saveCreditState(s){ localStorage.setItem(CREDIT_STORAGE_KEY, JSON.stringify(s)); }
+let CREDIT_STATE = loadCreditState();
+
+function creditStageFromScore(s){
+  if(s<25) return {num:1,label:'平静 (Calm)',cls:'s1'};
+  if(s<50) return {num:2,label:'利差走阔 (Widening)',cls:'s3'};
+  if(s<75) return {num:3,label:'信用收缩 (Contraction)',cls:'s4'};
+  return     {num:4,label:'雷曼型临界 (Lehman-type)',cls:'s5'};
+}
+function toggleCredit(key){
+  CREDIT_STATE[key] = !CREDIT_STATE[key];
+  saveCreditState(CREDIT_STATE);
+  renderCredit();
+}
+
+function renderCredit(){
+  const el = document.getElementById('credit');
+  const meta = document.getElementById('credit-meta');
+  if(window.CREDIT_LOAD_FAILED || !window.CREDIT_DATA){
+    el.className = 'bubble-card';
+    el.innerHTML = `<div style="text-align:center;color:var(--warn);padding:20px;font-size:13px">⚠ 未找到 credit.js — 请先运行 <code>python credit.py</code> 计算信用危机指标</div>`;
+    meta.textContent = '';
+    return;
+  }
+  const C = window.CREDIT_DATA;
+  const autoScore = C.auto_score;
+  const totalWeight = C.manual_checklist.reduce((a,c)=>a+c.weight, 0);
+  const checkedWeight = C.manual_checklist.reduce((a,c)=>a + (CREDIT_STATE[c.key]?c.weight:0), 0);
+  const manualScore = totalWeight ? (checkedWeight / totalWeight * 100) : 0;
+  const finalScore = autoScore * 0.7 + manualScore * 0.3;
+  const st = creditStageFromScore(finalScore);
+
+  el.className = `bubble-card ${st.cls}`;
+  const indSorted = [...C.indicators].sort((a,b)=>b.score-a.score);
+
+  el.innerHTML = `
+    <div class="thesis-box">💡 ${escapeHtml(C.thesis)}</div>
+    <div class="bubble-top">
+      <div class="bubble-stage" style="color:${C.stage_color}">
+        <span class="num">信用危机临界度 · Stage ${st.num} / 4 · ${C.fred_ok?'FRED 实时利差':'HYG/LQD 利差代理'}</span>
+        ${st.label}
+      </div>
+      <div class="bubble-scores">
+        <div class="sb"><span class="sv">${finalScore.toFixed(1)}</span><span>综合分</span></div>
+        <div class="sb"><span class="sv" style="color:var(--mute)">${autoScore.toFixed(1)}</span><span>自动 ×0.7</span></div>
+        <div class="sb"><span class="sv" style="color:var(--mute)">${manualScore.toFixed(0)}</span><span>人工 ×0.3</span></div>
+      </div>
+    </div>
+    <div class="meter-wrap">
+      <div class="meter m4">
+        <div class="seg" title="Stage 1 平静 (0–25)"></div>
+        <div class="seg" title="Stage 2 利差走阔 (25–50)"></div>
+        <div class="seg" title="Stage 3 信用收缩 (50–75)"></div>
+        <div class="seg" title="Stage 4 雷曼型临界 (75–100)"></div>
+      </div>
+      <div class="meter-marker" style="left:${Math.min(100,Math.max(0,finalScore))}%">
+        <span class="lbl">${finalScore.toFixed(0)}</span>
+      </div>
+      <div class="meter-labels">
+        <span>平静<br>0–25</span><span>利差走阔<br>25–50</span><span>信用收缩<br>50–75</span><span>雷曼型临界<br>75–100</span>
+      </div>
+    </div>
+    <div class="bubble-grid">
+      <div class="bubble-sub">
+        <h3>📉 信用市场领先指标（${C.indicators.length}项·按应力降序）</h3>
+        <div class="ind-list">
+          ${indSorted.map(i => `
+            <div class="ind ${indStageCls(i.score)}">
+              <div>
+                <div class="ind-name">${escapeHtml(i.name)}<span class="ind-src">${escapeHtml(i.src||'')}</span></div>
+                <div class="ind-reason">${escapeHtml(i.reason)}</div>
+              </div>
+              <div class="ind-right">
+                <span class="ind-value">${escapeHtml(i.display)}</span>
+                <span class="ind-score">${i.score.toFixed(0)}/100</span>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="bubble-sub">
+        <h3>☑ 人工监控清单（读新闻勾选 · ${checkedWeight}/${totalWeight}）</h3>
+        <div class="chk-list">
+          ${C.manual_checklist.map(c => {
+            const on = !!CREDIT_STATE[c.key];
+            return `
+            <label class="chk ${on?'on':''}" onclick="toggleCredit('${c.key}');event.preventDefault()">
+              <input type="checkbox" ${on?'checked':''} onclick="event.preventDefault()">
+              <span>${escapeHtml(c.label)}</span>
+              ${c.link?`<a href="${c.link}" target="_blank" rel="noopener" onclick="event.stopPropagation()">查</a>`:''}
+              <span class="chk-w">+${c.weight}</span>
+            </label>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="transmission-box">🇯🇵 对日传导：${escapeHtml(C.transmission)}</div>
+  `;
+  meta.textContent = `生成于 ${C.generated_at} · 重跑 credit.py 更新`;
+}
+window.toggleCredit = toggleCredit;
+
 /* ============== INIT ============== */
 function renderPricesMeta(){
   const el = document.getElementById('prices-meta');
@@ -737,7 +857,7 @@ function renderPricesMeta(){
   const stamp = window.PRICES_GENERATED_AT || '?';
   el.innerHTML = `📊 行情 ${ok}/${n} · 生成于 ${stamp} <span style="color:var(--mute)">· 重跑 fetch_prices.py 更新</span>`;
 }
-function renderAll(){renderBubble();renderPricesMeta();renderStats();renderLog();renderGantt();renderFilters();renderCards();}
+function renderAll(){renderBubble();renderCredit();renderPricesMeta();renderStats();renderLog();renderGantt();renderFilters();renderCards();}
 renderAll();
 // 数据由 PC 上的计划任务每日 07:00 / 16:30 JST 刷新后 git push 到 GitHub Pages
 (function(){
